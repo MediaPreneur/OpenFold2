@@ -89,8 +89,7 @@ class DataPipeline:
 
 	def process(self, input_fasta_path: Path, msa_output_dir: Path, feat_output_dir: Path=None) -> FeatureDict:
 		file_name = input_fasta_path.stem
-		with open(input_fasta_path) as f:
-			input_fasta_str = f.read()
+		input_fasta_str = Path(input_fasta_path).read_text()
 		input_seqs, input_descs = parsers.parse_fasta(input_fasta_str)
 		if len(input_seqs) != 1:
 			raise ValueError(f'DataPipeline: more than one sequence found {input_fasta_path}')
@@ -99,8 +98,7 @@ class DataPipeline:
 		num_res = len(input_sequence)
 
 		file_name = input_fasta_path.stem
-		with open(input_fasta_path) as f:
-			input_fasta_str = f.read()
+		input_fasta_str = Path(input_fasta_path).read_text()
 		input_seqs, input_descs = parsers.parse_fasta(input_fasta_str)
 		if len(input_seqs) != 1:
 			raise ValueError(f'DataPipeline: more than one sequence found {input_fasta_path}')
@@ -132,17 +130,16 @@ class DataPipeline:
 		mgnify_msa = mgnify_msa[:self.mgnify_max_hits]
 		mgnify_deletion_matrix = mgnify_deletion_matrix[:self.mgnify_max_hits]
 
-		if self._use_small_bfd:
-			jackhmmer_small_bfd_results = self.jackhmmer_small_bfd_runner.query(input_fasta_path)[0]
-		
-			bfd_out_path = msa_output_dir / Path(f'{file_name}_small_bfd_hits.sto')
-			with open(bfd_out_path, 'w') as f:
-				f.write(jackhmmer_small_bfd_results['sto'])
-			
-			bfd_msa, bfd_deletion_matrix, _ = parsers.parse_stockholm(jackhmmer_small_bfd_results['sto'])
-		else:
+		if not self._use_small_bfd:
 			raise NotImplementedError()
 
+		jackhmmer_small_bfd_results = self.jackhmmer_small_bfd_runner.query(input_fasta_path)[0]
+
+		bfd_out_path = msa_output_dir / Path(f'{file_name}_small_bfd_hits.sto')
+		with open(bfd_out_path, 'w') as f:
+			f.write(jackhmmer_small_bfd_results['sto'])
+
+		bfd_msa, bfd_deletion_matrix, _ = parsers.parse_stockholm(jackhmmer_small_bfd_results['sto'])
 		uniref90_out_path = msa_output_dir / Path(f'{file_name}_uniref90_hits.sto')
 		with open(uniref90_out_path, 'w') as f:
 			f.write(jackhmmer_uniref90_result['sto'])
@@ -150,9 +147,8 @@ class DataPipeline:
 		sequence_features = self.make_sequence_features(sequence=input_sequence, description=input_description, num_res=num_res)
 		msa_features = self.make_msa_features(msas=(uniref90_msa, bfd_msa, mgnify_msa),
 											deletion_matrices=(uniref90_deletion_matrix, bfd_deletion_matrix, mgnify_deletion_matrix))
-		
-		feature_dict = {**sequence_features, **msa_features}
-		return feature_dict
+
+		return {**sequence_features, **msa_features}
 
 	def process_pdb(self, pdb_path:Path, fasta_output_dir:Path=None):
 		assert pdb_path.exists()
@@ -164,10 +160,10 @@ class DataPipeline:
 				"all_atom_positions": prot.atom_positions,
 				"all_atom_mask": prot.atom_mask
 			}
-		
+
 		sequence = ''.join([residue_constants.restypes_with_x[aatype] for aatype in prot.aatype])
 
-		if not(fasta_output_dir is None):
+		if fasta_output_dir is not None:
 			seq_name = pdb_path.stem.upper()
 			fasta_path = fasta_output_dir / Path(f"{pdb_path.stem.lower()}.fasta")
 			with open(fasta_path, "w") as f:

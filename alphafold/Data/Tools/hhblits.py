@@ -41,11 +41,11 @@ class HHBlits:
 	def query(self, input_fasta_path: Path) -> Mapping[str, Any]:
 		with utils.tmpdir_manager() as query_tmp_dir:
 			a3m_path = query_tmp_dir / Path('output.a3m')
-			
+
 			db_cmd = []
 			for db_path in self.databases:
 				db_cmd += ['-d', db_path.as_posix()]
-			
+
 			cmd = [
 				self.binary_path,
 				'-i', input_fasta_path.as_posix(),
@@ -71,20 +71,17 @@ class HHBlits:
 
 			print(f'Launching subprocess {"".join(cmd)}')
 			process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-			with utils.timing(f'HHBlits query'):
+			with utils.timing('HHBlits query'):
 				stdout, stderr = process.communicate()
 				retcode = process.wait()
 			if retcode:
 				raise RuntimeError(f"HHBlits failed:\nstdout:\n{stdout.decode('utf-8')}\nstderr:\n{stderr[:500000].decode('utf-8')}")
-			
-			with open(a3m_path) as f:
-				a3m = f.read()
 
-		raw_output = dict(
-			a3m=a3m,
-			output=stdout,
-			stderr=stderr,
-			n_iter=self.n_iter,
-			e_value=self.e_value
+			a3m = Path(a3m_path).read_text()
+		return dict(
+		    a3m=a3m,
+		    output=stdout,
+		    stderr=stderr,
+		    n_iter=self.n_iter,
+		    e_value=self.e_value,
 		)
-		return raw_output

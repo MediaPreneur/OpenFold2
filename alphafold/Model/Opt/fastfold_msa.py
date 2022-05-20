@@ -64,17 +64,16 @@ class AttentionFF(nn.Module):
 		for module, (name_w, name_b) in zip(modules, param_names):
 			if rel_path is None:
 				data_weight = data[f'{name_w}']
-				if not(name_b is None):
+				if name_b is not None:
 					data_bias = data[f'{name_b}']
+			elif ind is None:
+				data_weight = data[f'{rel_path}'][f'{name_w}']
+				if name_b is not None:
+					data_bias = data[f'{rel_path}'][f'{name_b}']
 			else:
-				if ind is None:
-					data_weight = data[f'{rel_path}'][f'{name_w}']
-					if not(name_b is None):
-						data_bias = data[f'{rel_path}'][f'{name_b}']
-				else:
-					data_weight = data[f'{rel_path}'][f'{name_w}'][ind,...]
-					if not(name_b is None):
-						data_bias = data[f'{rel_path}'][f'{name_b}'][ind,...]
+				data_weight = data[f'{rel_path}'][f'{name_w}'][ind,...]
+				if name_b is not None:
+					data_bias = data[f'{rel_path}'][f'{name_b}'][ind,...]
 			if name_w in ('query_w', 'key_w', 'value_w', 'gating_w'):
 				print(f'Loading {name_w}: {data_weight.shape} -> special')
 				data_weight = torch.from_numpy(data_weight).reshape(self.value_dim*self.num_head, self.key_dim*self.num_head).transpose(-1,-2)
@@ -85,7 +84,7 @@ class AttentionFF(nn.Module):
 				qkv_weights.append(data_weight)
 			else:
 				module.weight.data.copy_(data_weight)
-			if not(name_b is None):
+			if name_b is not None:
 				if name_b in ('gating_b'):
 					print(f'Loading {name_b}: {data_bias.shape} -> {self.gating_bias.data.size()}')
 					self.gating_bias.data.copy_(torch.from_numpy(data_bias).reshape(self.gating_bias.data.shape))
@@ -95,7 +94,7 @@ class AttentionFF(nn.Module):
 				else:
 					print(f'Loading {name_b}: {data_bias.shape} -> {module.bias.size()}')
 					module.bias.data.copy_(torch.from_numpy(data_bias).reshape(module.bias.shape))
-		
+
 		qkv_weights = torch.cat(qkv_weights, dim=0)
 		print(f'Loading qkv_weights: {qkv_weights.shape} -> {self.qkv_weights.weight.size()}')
 		self.qkv_weights.weight.data.copy_(qkv_weights)
@@ -116,8 +115,8 @@ class AttentionFF(nn.Module):
 		# print('FF q NaN:', torch.any(torch.isnan(q)))
 		logits = torch.matmul(q, k.transpose(-1,-2))
 		# print('FF logits NaN:', torch.any(torch.isnan(logits)))
-		
-		if not(nonbatched_bias is None):
+
+		if nonbatched_bias is not None:
 			nonbatched_bias = rearrange(nonbatched_bias, 'b q k h -> b h q k')
 			# print('FF nonbbias:', nonbatched_bias.size())
 			# print('FF logits:', logits.size())
@@ -132,7 +131,7 @@ class AttentionFF(nn.Module):
 			weights = scale_mask_softmax(logits.unsqueeze(1), mask, self.scaling).squeeze(1)
 			# weights = scale_mask_softmax(logits, mask, self.scaling)
 			# return weights
-		
+
 		# if torch.any(torch.isnan(weights)):
 		# 	print('FF mask==0:', torch.any(mask==0.0))
 		# 	print('FF weights NaN:', torch.any(torch.isnan(weights)))
@@ -140,7 +139,7 @@ class AttentionFF(nn.Module):
 		# 	print(torch.all(mask==0.0, dim=-1))
 		# 	print(torch.any(torch.isnan(weights), dim=-1))
 		# 	sys.exit()
-		
+
 		weighted_avg = torch.matmul(weights, v)
 		# print('FF weighted_avg:', weighted_avg.size())
 		weighted_avg = rearrange(weighted_avg, 'b1 h n d -> b1 n (h d)')
@@ -148,10 +147,8 @@ class AttentionFF(nn.Module):
 		if self.config.gating:
 			gate_values = self.gating_linear(in_data)
 			weighted_avg = bias_sigmod_ele(gate_values, self.gating_bias, weighted_avg)
-		
-		output = self.o_linear(weighted_avg)
-		
-		return output
+
+		return self.o_linear(weighted_avg)
 
 class MSARowAttentionWithPairBiasFF(nn.Module):
 	"""

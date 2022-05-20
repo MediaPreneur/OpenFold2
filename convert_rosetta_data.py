@@ -37,14 +37,14 @@ def process_msa(msa_data, msa_alphabet):
 	return msa, deletion_matrix
 
 if __name__=='__main__':
-	parser = argparse.ArgumentParser(description='Train deep protein docking')	
+	parser = argparse.ArgumentParser(description='Train deep protein docking')
 	parser.add_argument('-rosetta_data_dir', default='/media/lupoglaz/tRosettaDataset/training_set', type=str)
 	parser.add_argument('-fasta_dir', default='/media/lupoglaz/AlphaFold2Dataset/Sequences', type=str)
 	parser.add_argument('-pdb_dir', default='/media/lupoglaz/AlphaFold2Dataset/Structures', type=str)
 	parser.add_argument('-output_msa_dir', default='/media/lupoglaz/AlphaFold2Dataset/Alignments', type=str)
 	parser.add_argument('-output_feat_dir', default='/media/lupoglaz/AlphaFold2Dataset/Features', type=str)
 	parser.add_argument('-data_dir', default='/media/lupoglaz/AlphaFold2Data', type=str)
-	
+
 	parser.add_argument('-jackhmmer_binary_path', default='jackhmmer', type=str)
 	parser.add_argument('-hhblits_binary_path', default='hhblits', type=str)
 	parser.add_argument('-hhsearch_binary_path', default='hhsearch', type=str)
@@ -58,10 +58,10 @@ if __name__=='__main__':
 	parser.add_argument('-pdb70_database_path', default='pdb70/pdb70', type=str)
 	parser.add_argument('-template_mmcif_dir', default='pdb_mmcif/mmcif_files', type=str)
 	parser.add_argument('-obsolete_pdbs_path', default='pdb_mmcif/obsolete.dat', type=str)
-	
+
 	parser.add_argument('-max_template_date', default='2020-05-14', type=str)
 	parser.add_argument('-preset', default='full_dbs', type=str)
-	
+
 	args = parser.parse_args()
 	args.rosetta_data_dir = Path(args.rosetta_data_dir)
 	assert args.rosetta_data_dir.exists()
@@ -92,7 +92,7 @@ if __name__=='__main__':
 	kalign_binary_path = Path(subprocess.run(["which", "kalign"], stdout=subprocess.PIPE).stdout[:-1].decode('utf-8'))
 	if not(kalign_binary_path.exists()):
 		kalign_binary_path = Path(args.kalign_binary_path)
-	
+
 	data_pipeline = DataPipeline(
 		jackhammer_binary_path=jackhmmer_binary_path,
 		hhblits_binary_path=hhblits_binary_path,
@@ -119,25 +119,26 @@ if __name__=='__main__':
 	msa_data = GeneralFileData(rosetta_msa_dir, allowed_suffixes=['.npz'])
 	all_data = get_stream(pdb_data + a3m_data + msa_data, batch_size=1)
 
-	msa_alphabet = {i: ch for i, ch in enumerate(list('ARNDCQEGHILKMFPSTWYV-'))}
+	msa_alphabet = dict(enumerate(list('ARNDCQEGHILKMFPSTWYV-')))
 
-	
+
 	for [pdb_path], [a3m_path], [msa_path] in all_data:
 		pdb_path, a3m_path = Path(pdb_path), Path(a3m_path)
 		try:
 			shutil.copy(pdb_path, args.pdb_dir / Path(pdb_path.stem + pdb_path.suffix))
 			pdb_features, pdb_sequence = data_pipeline.process_pdb(pdb_path)
-			
+
 			msa_data = np.load(msa_path)['msa']
 			msa, deletion_matrix = process_msa(msa_data, msa_alphabet)
-			
-			assert all([pdb_res == msa_res for pdb_res, msa_res in zip(pdb_sequence, msa[0])])
-			
+
+			assert all(
+			    pdb_res == msa_res for pdb_res, msa_res in zip(pdb_sequence, msa[0]))
+
 			num_res = len(pdb_sequence)
 			seq_description = pdb_path.stem.upper()
 			sequence_features = data_pipeline.make_sequence_features(sequence=pdb_sequence, description=seq_description, num_res=num_res)
 			msa_features = data_pipeline.make_msa_features(msas=(msa,),	deletion_matrices=(deletion_matrix, ))
-			
+
 			feature_dict = {**sequence_features, **msa_features, **pdb_features}
 			with open(args.output_feat_dir / Path(f'{pdb_path.stem.lower()}_features.pkl'), 'wb') as f:
 				pickle.dump(feature_dict, f, protocol=4)

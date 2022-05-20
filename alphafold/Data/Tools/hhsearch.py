@@ -35,13 +35,11 @@ class HHSearch:
 
 			print(f'Launching subprocess {"".join(cmd)}')
 			process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-			with utils.timing(f'HHSearch query'):
+			with utils.timing('HHSearch query'):
 				stdout, stderr = process.communicate()
 				retcode = process.wait()
 			if retcode:
 				raise RuntimeError(f'HHSearch failed:\nstdout:\n{stdout.decode("utf-8")}\nstderr:\n{stderr[:100000].decode("utf-8")}')
 
-			with open(hhr_path) as f:
-				hhr = f.read()
-				
+			hhr = Path(hhr_path).read_text()
 		return hhr

@@ -14,13 +14,13 @@ def string_plot(af2, thist, field):
 	thist = this_proc_features[field][0, :]
 	N = af2t.shape[0]
 	M = int(np.sqrt(N))
-	af2t = af2t[:M*M].view(M,M)
-	thist = thist[:M*M].view(M,M)
-	
+	af2t = af2t[:M**2].view(M, M)
+	thist = thist[:M**2].view(M, M)
+
 	plt.subplot(1,2,1)
 	plt.title(f'AF2: {field}')
 	plt.imshow(af2t)
-	
+
 	plt.subplot(1,2,2)
 	plt.title(f'This: {field}')
 	plt.imshow(thist)
@@ -29,12 +29,11 @@ def string_plot(af2, thist, field):
 def image_plot(af2, thist, field):
 	if field == 'msa_feat':
 		raise NotImplementedError()
-	else:
-		batch_size = this_proc_features[field].size(0)
-		size_x = this_proc_features[field].size(1)
-		size_y = this_proc_features[field].size(2)
-		af2t = torch.from_numpy(af2_proc_features[field])
-		thist = this_proc_features[field]
+	batch_size = this_proc_features[field].size(0)
+	size_x = this_proc_features[field].size(1)
+	size_y = this_proc_features[field].size(2)
+	af2t = torch.from_numpy(af2_proc_features[field])
+	thist = this_proc_features[field]
 
 	fig = plt.figure(figsize=(2*6*size_x/float(size_x+size_y), batch_size*6*size_y/float(size_x+size_y)))
 
@@ -47,7 +46,7 @@ def image_plot(af2, thist, field):
 		else:
 			plt.imshow(af2t[i,:,:].transpose(0,1))
 
-	
+
 	for i in range(batch_size):
 		plt.subplot(batch_size,2,2*i+2)
 		if i==0:

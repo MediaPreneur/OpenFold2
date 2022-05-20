@@ -30,7 +30,7 @@ def dropout_wrapper(module:nn.Module, input_act:torch.Tensor, mask:torch.Tensor,
 		"""
 		if is_training and rate>0.0:
 			shape = list(tensor.shape)
-			if not(broadcast_dim is None):
+			if broadcast_dim is not None:
 				shape[broadcast_dim] = 1
 			keep_rate = 1.0 - rate
 			p = torch.zeros_like(tensor).fill_(keep_rate)
@@ -66,12 +66,11 @@ class EvoformerIteration(nn.Module):
 		self.is_extra_msa = is_extra_msa
 
 		self.msa_row_attention_with_pair_bias = MSARowAttentionWithPairBias(config.msa_row_attention_with_pair_bias, global_config, pair_dim, msa_dim)
-		
-		if not is_extra_msa:
-			self.msa_column_attention = MSAColumnAttention(config.msa_column_attention, global_config, msa_dim)
-		else:
-			self.msa_column_attention = MSAColumnGlobalAttention(config.msa_column_attention, global_config, msa_dim)
 
+		self.msa_column_attention = (MSAColumnGlobalAttention(
+		    config.msa_column_attention, global_config,
+		    msa_dim) if is_extra_msa else MSAColumnAttention(
+		        config.msa_column_attention, global_config, msa_dim))
 		self.msa_transition = Transition(config.msa_transition, global_config, msa_dim)
 		self.outer_product_mean = OuterProductMean(config.outer_product_mean, global_config, pair_dim, msa_dim)
 		self.triangle_multiplication_outgoing = TriangleMultiplication(config.triangle_multiplication_outgoing, global_config, pair_dim)
@@ -124,12 +123,11 @@ class EvoformerIterationOpt(nn.Module):
 		self.is_extra_msa = is_extra_msa
 
 		self.msa_row_attention_with_pair_bias = MSARowAttentionWithPairBiasOpt(config.msa_row_attention_with_pair_bias, global_config, pair_dim, msa_dim)
-		
-		if not is_extra_msa:
-			self.msa_column_attention = MSAColumnAttentionOpt(config.msa_column_attention, global_config, msa_dim)
-		else:
-			self.msa_column_attention = MSAColumnGlobalAttentionOpt(config.msa_column_attention, global_config, msa_dim)
 
+		self.msa_column_attention = (MSAColumnGlobalAttentionOpt(
+		    config.msa_column_attention, global_config,
+		    msa_dim) if is_extra_msa else MSAColumnAttentionOpt(
+		        config.msa_column_attention, global_config, msa_dim))
 		self.msa_transition = TransitionOpt(config.msa_transition, global_config, msa_dim)
 		self.outer_product_mean = OuterProductMeanOpt(config.outer_product_mean, global_config, pair_dim, msa_dim)
 		self.triangle_multiplication_outgoing = TriangleMultiplicationOpt(config.triangle_multiplication_outgoing, global_config, pair_dim)
@@ -244,18 +242,18 @@ class EmbeddingsAndEvoformer(nn.Module):
 		super(EmbeddingsAndEvoformer, self).__init__()
 		self.config = config
 		self.global_config = global_config
-		
+
 		self.input_emb = InputEmbeddings(config, global_config, msa_dim=msa_dim, target_dim=target_dim)
 		self.recycle_emb = RecycleEmbedding(config, global_config)
 		self.extra_msa_emb = ExtraMSAEmbedding(config, global_config, msa_dim=extra_msa_dim)
 		self.extra_msa_stack = nn.ModuleList()
-		for i in range(self.config.extra_msa_stack_num_block):
+		for _ in range(self.config.extra_msa_stack_num_block):
 			self.extra_msa_stack.append(EvoformerIterationFF(	config.evoformer, global_config, 
 															msa_dim=config.extra_msa_channel, 
 															pair_dim=config.pair_channel, 
 															is_extra_msa=True))
 		self.evoformer_stack = nn.ModuleList()
-		for i in range(self.config.evoformer_num_block):
+		for _ in range(self.config.evoformer_num_block):
 			self.evoformer_stack.append(EvoformerIterationFF(	config.evoformer, global_config, 
 															msa_dim=config.msa_channel, 
 															pair_dim=config.pair_channel, 
@@ -377,10 +375,7 @@ class AlphaFoldIteration(nn.Module):
 	
 	def load_weights_from_af2(self, data, rel_path: str='alphafold_iteration', ind:int=None):
 		for (name, priority), module in zip(self.head_order, self.heads):
-			if name != 'structure_module':
-				load_name = f'{name}_head'
-			else:
-				load_name = name
+			load_name = f'{name}_head' if name != 'structure_module' else name
 			module.load_weights_from_af2(data, rel_path=f'{rel_path}/{load_name}', ind=ind)
 		self.evoformer_module.load_weights_from_af2(data, rel_path=f'{rel_path}/evoformer')
 
@@ -406,14 +401,10 @@ class AlphaFoldIteration(nn.Module):
 		total_loss = 0.0
 		ret = {'representations':representations}
 		def loss(module, head_config, ret, name, filter_ret:bool=True):
-			if filter_ret:
-				value = ret[name]
-			else:
-				value = ret
+			value = ret[name] if filter_ret else ret
 			loss_output = module.loss(value, batch)
 			ret[name].update(loss_output)
-			loss = head_config.weight * ret[name]['loss']
-			return loss
+			return head_config.weight * ret[name]['loss']
 		
 		for (name, priority), head in zip(self.head_order, self.heads):
 			head_config = self.config.heads[name]

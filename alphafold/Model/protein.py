@@ -116,7 +116,7 @@ def find_optimal_renaming(
 		atom14_gt_exists:torch.Tensor, #(N, 14)
 		atom14_pred_positions:torch.Tensor, #(N, 14, 3)
 		atom14_pred_exists:torch.Tensor #(N, 14)
-		) -> torch.Tensor: #(N,)
+		) -> torch.Tensor:	#(N,)
 	"""https://github.com/lupoglaz/alphafold/blob/2d53ad87efedcbbda8e67ab3be96af769dbeae7d/alphafold/model/all_atom.py#L929"""
 	assert atom14_gt_positions.ndimension() == 3
 	assert atom14_alt_gt_positions.ndimension() == 3
@@ -128,7 +128,7 @@ def find_optimal_renaming(
 	pred_dists = dist(atom14_pred_positions)
 	gt_dists = dist(atom14_gt_positions)
 	alt_gt_dists = dist(atom14_alt_gt_positions)
-	
+
 	lddt = torch.sqrt(1e-10 + torch.square(pred_dists-gt_dists))
 	alt_lddt = torch.sqrt(1e-10 + torch.square(pred_dists-alt_gt_dists))
 	mask = 	atom14_gt_exists[:,None,:,None] * atom14_atom_is_ambiguous[:,None,:,None] * \
@@ -136,8 +136,7 @@ def find_optimal_renaming(
 	per_res_lddt = torch.sum(mask * lddt, dim=(1,2,3))
 	alt_per_res_lddt = torch.sum(mask * alt_lddt, dim=(1,2,3))
 
-	alt_naming_is_better = (alt_per_res_lddt < per_res_lddt).to(dtype=torch.float32)
-	return alt_naming_is_better
+	return (alt_per_res_lddt < per_res_lddt).to(dtype=torch.float32)
 
 def between_residue_bond_loss(
 		pred_atom_positions:torch.Tensor, pred_atom_mask:torch.Tensor, 
@@ -487,12 +486,9 @@ def get_chi_atom_indices():
 	for residue_name in residue_constants.restypes:
 		residue_name = residue_constants.restype_1to3[residue_name]
 		residue_chi_angles = residue_constants.chi_angles_atoms[residue_name]
-		atom_indices = []
-		for chi_angle in residue_chi_angles:
-			atom_indices.append(
-				[residue_constants.atom_order[atom] for atom in chi_angle])
-		for _ in range(4 - len(atom_indices)):
-			atom_indices.append([0, 0, 0, 0])
+		atom_indices = [[residue_constants.atom_order[atom] for atom in chi_angle]
+		                for chi_angle in residue_chi_angles]
+		atom_indices.extend([0, 0, 0, 0] for _ in range(4 - len(atom_indices)))
 		chi_atom_indices.append(atom_indices)
 
 	chi_atom_indices.append([[0, 0, 0, 0]] * 4)

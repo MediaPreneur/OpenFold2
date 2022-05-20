@@ -192,14 +192,14 @@ if __name__=='__main__':
 	# parser.add_argument('-dataset_dir', default='/media/HDD/AlphaFold2Dataset/Features', type=str)
 	# parser.add_argument('-dataset_dir', default='/media/lupoglaz/AlphaFold2Dataset/Features', type=str)
 	parser.add_argument('-dataset_dir', default='/gpfs/gpfs0/g.derevyanko/OpenFold2Dataset/Features', type=str)
-	
+
 	parser.add_argument('-log_dir', default='LogTrain', type=str)
 	# parser.add_argument('-log_dir', default=None, type=str)
 
 	# parser.add_argument('-model_name', default='model_tiny', type=str)
 	parser.add_argument('-model_name', default='model_small', type=str)
 	# parser.add_argument('-model_name', default='model_big', type=str)
-	
+
 	parser.add_argument('-num_gpus', default=1, type=int) #per node
 	parser.add_argument('-num_nodes', default=1, type=int)
 	parser.add_argument('-num_accum', default=1, type=int)
@@ -209,66 +209,57 @@ if __name__=='__main__':
 	parser.add_argument('-progress_bar', default=1, type=int)
 	parser.add_argument('-deepspeed_config_path', default='deepspeed_config.json', type=str)
 	parser.add_argument('-resume_chkpt', default=None, type=str)
-	
+
 
 	args = parser.parse_args()
 	args.dataset_dir = Path(args.dataset_dir)
-	
-	if not(args.log_dir is None):
-		logger = TensorBoardLogger(args.log_dir, name=args.model_name)
-	else:
-		logger = None
 
+	logger = (None if args.log_dir is None else TensorBoardLogger(
+	    args.log_dir, name=args.model_name))
 	data = DataModule(args.dataset_dir, batch_size=1)#args.num_gpus*args.num_nodes)
 	config = model_config(args.model_name)
 	model = AlphaFoldModule(config)
 
-	if not(args.resume_chkpt is None):
+	if args.resume_chkpt is not None:
 		sd = get_fp32_state_dict_from_zero_checkpoint(args.resume_chkpt)
 		sd = {k[len('module.af2.'):]:v for k,v in sd.items()}
 		this_sd = model.af2.state_dict()
-		missing_params = []
-		for key in sd.keys():
-			if not(key in this_sd):
-				missing_params.append(key)
-		excessive_params = []
-		for key in this_sd.keys():
-			if not(key in sd):
-				excessive_params.append(key)
+		missing_params = [key for key in sd if key not in this_sd]
+		excessive_params = [key for key in this_sd.keys() if key not in sd]
 		print('Loaded chkpt key not in this model:', missing_params[:10])
 		print('This model key not in chkpt:', excessive_params[:10])
 		model.af2.load_state_dict(sd)
 
 	if args.precision == 'bf16':
 		model=model.to(dtype=torch.bfloat16)
-	
+
 	if "SLURM_JOB_ID" in os.environ:
 		cluster_environment = SLURMEnvironment()
 	else:
 		cluster_environment = None
-	
+
 	trainer = pl.Trainer(	accelerator="gpu",
-							gpus=args.num_gpus,
-							logger=logger,
-							max_steps=args.max_iter,
-							num_nodes=args.num_nodes, 
-							# strategy=CustomDDPPlugin(find_unused_parameters=False),
-							strategy=DeepSpeedPlugin(config=args.deepspeed_config_path, load_full_weights=True),
-							accumulate_grad_batches=args.num_accum,
-							gradient_clip_val=0.1,
-							gradient_clip_algorithm = 'norm',
-							precision=args.precision,
-							amp_backend="native",
-							# amp_backend="apex",
-							# amp_level='O3',
-							enable_progress_bar=bool(args.progress_bar),
-							# callbacks = [
-							# 	PerformanceLoggingCallback(Path('perf.json'), args.num_gpus*args.num_nodes)
-							# ],
-							resume_from_checkpoint = args.resume_chkpt
- 						)
+	gpus=args.num_gpus,
+	logger=logger,
+	max_steps=args.max_iter,
+	num_nodes=args.num_nodes, 
+	# strategy=CustomDDPPlugin(find_unused_parameters=False),
+	strategy=DeepSpeedPlugin(config=args.deepspeed_config_path, load_full_weights=True),
+	accumulate_grad_batches=args.num_accum,
+	gradient_clip_val=0.1,
+	gradient_clip_algorithm = 'norm',
+	precision=args.precision,
+	amp_backend="native",
+	# amp_backend="apex",
+	# amp_level='O3',
+	enable_progress_bar=bool(args.progress_bar),
+	# callbacks = [
+	# 	PerformanceLoggingCallback(Path('perf.json'), args.num_gpus*args.num_nodes)
+	# ],
+	resume_from_checkpoint = args.resume_chkpt
+	)
 	trainer.fit(model, data)
-	if not(args.log_dir is None):
+	if args.log_dir is not None:
 		trainer.save_checkpoint(Path(trainer.logger.log_dir)/Path("checkpoints/final.ckpt"), weights_only=True)
 
 	# ckpt = torch.load(Path("LogTrain/tiny_config_wosv/version_0/checkpoints/final.ckpt"))

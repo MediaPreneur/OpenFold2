@@ -22,7 +22,7 @@ def dropout_wrapper(module:nn.Module, input_act:torch.Tensor, mask:torch.Tensor,
 		"""
 		if is_training and rate>0.0:
 			shape = list(tensor.shape)
-			if not(broadcast_dim is None):
+			if broadcast_dim is not None:
 				shape[broadcast_dim] = 1
 			keep_rate = 1.0 - rate
 			p = torch.zeros_like(tensor).fill_(keep_rate)

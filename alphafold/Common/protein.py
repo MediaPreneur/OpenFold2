@@ -144,20 +144,17 @@ def to_pdb(prot: Protein) -> str:
   """
   restypes = residue_constants.restypes + ['X']
   res_1to3 = lambda r: residue_constants.restype_1to3.get(restypes[r], 'UNK')
-  atom_types = residue_constants.atom_types
-
-  pdb_lines = []
-
   atom_mask = prot.atom_mask
   aatype = prot.aatype
   atom_positions = prot.atom_positions
+  atom_types = residue_constants.atom_types
   residue_index = prot.residue_index.astype(np.int32)
   b_factors = prot.b_factors
 
   if np.any(aatype > residue_constants.restype_num):
     raise ValueError('Invalid aatypes.')
 
-  pdb_lines.append('MODEL     1')
+  pdb_lines = ['MODEL     1']
   atom_index = 1
   chain_index = -1
   residue_index_prev = residue_index[0]-100
@@ -201,11 +198,7 @@ def to_pdb(prot: Protein) -> str:
   chain_termination_line = (
       f'{chain_end:<6}{atom_index:>5}      {res_1to3(aatype[-1]):>3} '
       f'{chain_id:>1}{residue_index[-1]:>4}')
-  pdb_lines.append(chain_termination_line)
-  pdb_lines.append('ENDMDL')
-
-  pdb_lines.append('END')
-  pdb_lines.append('')
+  pdb_lines.extend((chain_termination_line, 'ENDMDL', 'END', ''))
   return '\n'.join(pdb_lines)
 
 

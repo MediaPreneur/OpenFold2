@@ -74,7 +74,7 @@ class InvariantPointAttention(nn.Module):
 		num_res = inputs_1d.size(0)
 		q_scalar = self.q_scalar(inputs_1d)
 		q_scalar = q_scalar.view(num_res, self.num_head, self.num_scalar_qk)
-		
+
 		affine.cast_to(dtype=torch.float32) #All affine operations to float32
 
 		kv_scalar = self.kv_scalar(inputs_1d)
@@ -83,7 +83,7 @@ class InvariantPointAttention(nn.Module):
 
 		q_point_local = self.q_point_local(inputs_1d)
 		q_point_local = q_point_local.split(self.num_head * self.num_point_qk, dim=-1)
-		
+
 		#Float32 region
 		q_point_local = [res.to(dtype=torch.float32) for res in q_point_local]
 		q_point_global = affine.apply_to_point(q_point_local, extra_dims=1)
@@ -91,7 +91,7 @@ class InvariantPointAttention(nn.Module):
 		#Float32 region
 
 		q_point = [x.view(num_res, self.num_head, self.num_point_qk) for x in q_point_global]
-		
+
 		kv_point_local = self.kv_point_local(inputs_1d)
 		kv_point_local = kv_point_local.split(self.num_head * (self.num_point_qk + self.num_point_v), dim=-1)
 
@@ -103,16 +103,16 @@ class InvariantPointAttention(nn.Module):
 
 		kv_point_global = [x.view(num_res, self.num_head, self.num_point_qk + self.num_point_v) for x in kv_point_global]
 		k_point, v_point = list(zip(*[(x[:,:,:self.num_point_qk], x[:,:,self.num_point_qk:]) for x in kv_point_global]))
-		
+
 		point_weights = self.softplus(self.trainable_point_weights).unsqueeze(dim=1) * self.point_weights
 		v_point = [x.transpose(-2, -3) for x in v_point]
 		q_point = [x.transpose(-2, -3) for x in q_point]
 		k_point = [x.transpose(-2, -3) for x in k_point]
 		dist2 = [torch.pow(qx[:,:,None,:]-kx[:,None,:,:], 2) for qx, kx in zip(q_point, k_point)]
 		dist2 = sum(dist2)
-		
+
 		attn_qk_point = -0.5 * torch.sum(point_weights[:,None,None,:] * dist2, dim=-1)
-		
+
 		v = v_scalar.transpose(-2, -3)
 		q = (self.scalar_weights * q_scalar).transpose(-2, -3)
 		k = k_scalar.transpose(-2, -3)
@@ -121,30 +121,28 @@ class InvariantPointAttention(nn.Module):
 		attn_logits = attn_qk_scalar + attn_qk_point
 		attention_2d = self.attention_2d(inputs_2d)
 		attn_logits += attention_2d.permute(2,0,1) * float(self.attention_2d_weights)
-		
+
 		mask_2d = mask * (mask.transpose(-1, -2))
 		attn_logits -= 1e5 * (1.0 - mask_2d)
-		
+
 		attn = self.softmax(attn_logits)
 		result_scalar = torch.matmul(attn, v).transpose(-2, -3)
 		result_point_global = [torch.sum(attn[:,:,:,None]*vx[:,None,:,:], dim=-2).transpose(-2, -3) for vx in v_point]
 
-		output_features = []
 		result_scalar = result_scalar.reshape(num_res, self.num_head*self.num_scalar_v)
-		output_features.append(result_scalar)
-		
+		output_features = [result_scalar]
 		result_point_global = [r.reshape(num_res, self.num_head*self.num_point_v) for r in result_point_global]
-		
+
 		## VVV Float32 region (geometry region)
 		# affine.cast_to(dtype=torch.float32)
 		result_point_global = [res.to(dtype=torch.float32) for res in result_point_global]
-		
+
 		result_point_local = affine.invert_point(result_point_global, extra_dims=1)
 		dist = torch.sqrt(self._dist_epsilon 
 							+ torch.pow(result_point_local[0], 2)
 							+ torch.pow(result_point_local[1], 2)
 							+ torch.pow(result_point_local[2], 2))
-		
+
 		dist = dist.to(dtype=result_scalar.dtype)
 		affine.cast_to(dtype=result_scalar.dtype)
 		result_point_local = [res.to(dtype=result_scalar.dtype) for res in result_point_local]
@@ -152,12 +150,12 @@ class InvariantPointAttention(nn.Module):
 
 		output_features.extend(result_point_local)
 		output_features.append(dist)
-				
+
 		result_attention_over_2d = torch.einsum('hij,ijc->ihc', attn, inputs_2d)
 		num_out = self.num_head * result_attention_over_2d.shape[-1]
 		output_features.append(result_attention_over_2d.view(num_res, num_out))
 		final_act = torch.cat(output_features, dim=-1)
-			
+
 		return self.output_pojection(final_act)
 
 class MultiRigidSidechain(nn.Module):
@@ -171,15 +169,25 @@ class MultiRigidSidechain(nn.Module):
 
 		self.num_repr = num_repr
 
-		self.input_projection = nn.ModuleList([Linear(repr_dim, self.config.num_channel)
-											for i in range(num_repr)])
+		self.input_projection = nn.ModuleList(
+		    [Linear(repr_dim, self.config.num_channel) for _ in range(num_repr)])
 
-		self.resblock1 = nn.ModuleList([Linear(self.config.num_channel, self.config.num_channel, initializer='relu') 
-										for i in range(self.config.num_residual_block-1)])
+		self.resblock1 = nn.ModuleList([
+		    Linear(
+		        self.config.num_channel,
+		        self.config.num_channel,
+		        initializer='relu',
+		    ) for _ in range(self.config.num_residual_block - 1)
+		])
 		self.resblock1.append(Linear(self.config.num_channel, self.config.num_channel, initializer='final'))
 
-		self.resblock2 = nn.ModuleList([Linear(self.config.num_channel, self.config.num_channel, initializer='relu') 
-										for i in range(self.config.num_residual_block-1)])
+		self.resblock2 = nn.ModuleList([
+		    Linear(
+		        self.config.num_channel,
+		        self.config.num_channel,
+		        initializer='relu',
+		    ) for _ in range(self.config.num_residual_block - 1)
+		])
 		self.resblock2.append(Linear(self.config.num_channel, self.config.num_channel, initializer='final'))
 
 		self.unnormalized_angles = Linear(self.config.num_channel, 14)
@@ -191,10 +199,7 @@ class MultiRigidSidechain(nn.Module):
 		nums=[self.config.num_residual_block, self.config.num_residual_block, self.num_repr, 1]
 		for module, name, num in zip(modules, names, nums):
 			for i in range(num):
-				if i==0:
-					add_str = ''
-				else:
-					add_str = f'_{i}'
+				add_str = '' if i==0 else f'_{i}'
 				if ind is None:
 					w = data[f'{rel_path}/{name}{add_str}']['weights'].transpose(-1,-2)
 					b = data[f'{rel_path}/{name}{add_str}']['bias']
@@ -237,14 +242,12 @@ class MultiRigidSidechain(nn.Module):
 		all_frames_to_global = protein.torsion_angles_to_frames(aatype, backb_to_global, angles)
 		pred_positions = protein.frames_and_literature_positions_to_atom14_pos(aatype, all_frames_to_global)
 		affine.cast_to(dtype=act.dtype)
-		# print('Sidechain all_frames_to_global dtype:', all_frames_to_global.rot.xx.dtype)
-		# print('Sidechain pred_positions dtype:', pred_positions.x.dtype)
-		
-		outputs = {	'angles_sin_cos': angles,
-					'unnormalized_angles_sin_cos': unnormalized_angles,
-					'atom_pos': pred_positions,
-					'frames': all_frames_to_global}
-		return outputs
+		return {
+		    'angles_sin_cos': angles,
+		    'unnormalized_angles_sin_cos': unnormalized_angles,
+		    'atom_pos': pred_positions,
+		    'frames': all_frames_to_global,
+		}
 
 class FoldIteration(nn.Module):
 	"""
@@ -259,9 +262,14 @@ class FoldIteration(nn.Module):
 		self.attention_module = InvariantPointAttention(config, global_config, 
 								num_feat_1d=num_feat_1d, num_feat_2d=num_feat_2d)
 		self.attention_layer_norm = nn.LayerNorm(num_feat_1d)
-		
-		self.transition = nn.ModuleList([Linear(self.config.num_channel, self.config.num_channel, initializer='relu') 
-										for i in range(self.config.num_layer_in_transition-1)])
+
+		self.transition = nn.ModuleList([
+		    Linear(
+		        self.config.num_channel,
+		        self.config.num_channel,
+		        initializer='relu',
+		    ) for _ in range(self.config.num_layer_in_transition - 1)
+		])
 		self.transition.append(Linear(self.config.num_channel, self.config.num_channel, initializer='final'))
 
 		self.transition_layer_norm = nn.LayerNorm(self.config.num_channel)
@@ -276,10 +284,7 @@ class FoldIteration(nn.Module):
 		nums=[self.config.num_layer_in_transition, 1]
 		for module, name, num in zip(modules, names, nums):
 			for i in range(num):
-				if i==0:
-					add_str = ''
-				else:
-					add_str = f'_{i}'
+				add_str = '' if i==0 else f'_{i}'
 				if ind is None:
 					w = data[f'{rel_path}/{name}{add_str}']['weights'].transpose(-1,-2)
 					b = data[f'{rel_path}/{name}{add_str}']['bias']

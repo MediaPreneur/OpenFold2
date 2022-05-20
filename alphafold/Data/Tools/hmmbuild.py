@@ -28,7 +28,7 @@ class HMMBuild:
 
 			print(f"Launching subprocess {''.join(cmd)}")
 			process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-			with utils.timing(f'HMMBuild query'):
+			with utils.timing('HMMBuild query'):
 				stdout, stderr = process.communicate()
 				retcode = process.wait()
 			if retcode:

@@ -10,13 +10,13 @@ def trunc_init(weights, scale:float=1.0, fan='fan_in'):
 	fans = {'fan_in': lambda f_out, f_in: f_in, 
 			'fan_out': lambda f_out, f_in: f_out, 
 			'fan_avg': lambda f_out, f_in: (f_in+f_out)/2.0 }
-	assert fan in (fans.keys())
+	assert fan in fans
 	f = fans[fan](* weights.shape)
-	scale = scale/max(1.0, f)
+	scale /= max(1.0, f)
 	a, b = -2.0, 2.0
 	std = math.sqrt(scale) / truncnorm.std(a=a, b=b, loc=0.0, scale=1.0)
-	samples = truncnorm.rvs(a=a, b=b, loc=0.0, scale=std, size=weights.size(0)*weights.size(1))
-	return samples
+	return truncnorm.rvs(
+	    a=a, b=b, loc=0.0, scale=std, size=weights.size(0) * weights.size(1))
 	
 
 

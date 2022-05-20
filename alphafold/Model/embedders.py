@@ -108,8 +108,8 @@ class RecycleEmbedding(nn.Module):
 		d = x.unsqueeze(dim=-2) - x.unsqueeze(dim=-3)
 		d2 = d*d
 		dist2 = torch.sum(d2, dim=-1, keepdim=True)
-		dgram = (dist2>lower_bins2).to(dtype=x.dtype) * (dist2<upper_bins2).to(dtype=x.dtype)
-		return dgram
+		return (dist2 > lower_bins2).to(dtype=x.dtype) * (dist2 < upper_bins2).to(
+		    dtype=x.dtype)
 	
 	def pseudo_beta_fn(self, aatype, all_atom_positions, all_atom_masks):
 		"""

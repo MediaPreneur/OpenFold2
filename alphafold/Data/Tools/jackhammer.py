@@ -50,13 +50,13 @@ class Jackhammer:
 				tblout_path = query_tmp_dir / Path('tblout.txt')
 				cmdflags.extend(['-tblout', tblout_path.as_posix()])
 
-			if not (self.z_value is None):
+			if self.z_value is not None:
 				cmdflags.extend(['-Z', str(self.z_value)])
 
-			if not (self.dom_e is None):
+			if self.dom_e is not None:
 				cmdflags.extend(['--domE', str(self.dom_e)])
-			
-			if not (self.incdom_e is None):
+
+			if self.incdom_e is not None:
 				cmdflags.extend(['--incdomE', str(self.incdom_e)])
 
 			cmd = [self.binary_path.as_posix()] + cmd_flags + [input_fasta_path.as_posix(), database_path.as_posix()]
@@ -67,23 +67,15 @@ class Jackhammer:
 				retcode = process.wait()
 			if retcode:
 				raise RuntimeError(f"Jackhammer failed: {stderr.decode('utf-8')}")
-			
-			tbl=''
-			if self.get_tblout:
-				with open(tblout_path) as f:
-					tbl = f.read()
-			
-			with open(sto_path) as f:
-				sto = f.read()
 
-			raw_output = dict(
-				sto = sto,
-				tbl = tbl,
-				stderr = stderr,
-				n_iter = self.n_iter,
-				e_value = self.e_value
-			)
-			return raw_output
+			tbl = Path(tblout_path).read_text() if self.get_tblout else ''
+			sto = Path(sto_path).read_text()
+			return dict(
+			    sto=sto,
+			    tbl=tbl,
+			    stderr=stderr,
+			    n_iter=self.n_iter,
+			    e_value=self.e_value)
 
 	def query(self, input_fasta_path:Path) -> Sequence[Mapping[str, Any]]:
 		if self.num_streamed_chunks is None:
@@ -91,7 +83,6 @@ class Jackhammer:
 		
 		raise NotImplemented()
 
-if __name__ == '__main__':
-	pass
+pass
 
 

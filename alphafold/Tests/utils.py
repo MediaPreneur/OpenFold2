@@ -10,7 +10,7 @@ reporter = MemReporter()
 
 def convert(arg, device:torch.device=None):
 	if isinstance(arg, tuple):
-		return tuple([convert(arg_i) for arg_i in arg])
+		return tuple(convert(arg_i) for arg_i in arg)
 	elif isinstance(arg, list):
 		return [convert(arg_i) for arg_i in arg]
 	elif isinstance(arg, np.ndarray):
@@ -30,8 +30,8 @@ def check_success(this_res, res):
 	return err.sum().numpy(), max_err, mean_err
 
 def check_recursive(a, b, depth:int=0, key=None, tol_max:float=1e-3, tol_mean=1e-3):
-	str_depth = ''.join(['--' for i in range(depth)])
-	if isinstance(a, tuple) or isinstance(a, list):
+	str_depth = ''.join(['--' for _ in range(depth)])
+	if isinstance(a, (tuple, list)):
 		errs = []
 		max_errs = []
 		mean_errs = []
@@ -47,7 +47,7 @@ def check_recursive(a, b, depth:int=0, key=None, tol_max:float=1e-3, tol_mean=1e
 				print(f'{str_depth}>{i}: success = {succ}:\t{err_i}\t{max_err_i}\t{mean_err_i}')
 
 		return np.sum(errs), max(max_errs), np.mean(mean_errs)
-	
+
 	if isinstance(a, dict):
 		errs = []
 		max_errs = []
@@ -64,18 +64,18 @@ def check_recursive(a, b, depth:int=0, key=None, tol_max:float=1e-3, tol_mean=1e
 				print(f'{str_depth}>{key}: success = {succ}:\t{err_i}\t{max_err_i}\t{mean_err_i}')
 
 		return np.sum(errs), max(max_errs), np.mean(mean_errs)
-	
+
 	if isinstance(a, np.ndarray):
 		a = torch.from_numpy(a)
-	
+
 	if isinstance(b, np.ndarray):
 		b = torch.from_numpy(b)
 
-	if isinstance(a, float) or isinstance(a, int):
+	if isinstance(a, (float, int)):
 		a = torch.Tensor([a])
-	if isinstance(b, float) or isinstance(b, int):
+	if isinstance(b, (float, int)):
 		b = torch.Tensor([b])
-	
+
 	err, max_err, mean_err = check_success(a, b)
 	succ = (max_err<tol_max) and (mean_err<tol_mean)
 	print(f'{str_depth}> success = {succ}:\t{err}\t{max_err}\t{mean_err}')

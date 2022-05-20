@@ -23,7 +23,7 @@ class HMMSearch:
 			output_a3m_path = query_tmp_dir / Path('output.a3m')
 			with open(hmm_input_path, 'w') as f:
 				f.write(hmm)
-			
+
 			cmd = [
 				self.binary_path.as_posix(),
 				'--noali',
@@ -41,13 +41,11 @@ class HMMSearch:
 
 			print(f"Launching subprocess {''.join(cmd)}")
 			process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-			with utils.timing(f'HMMSearch query'):
+			with utils.timing('HMMSearch query'):
 				stdout, stderr = process.communicate()
 				retcode = process.wait()
 			if retcode:
 				raise RuntimeError(f"HMMSearch failed:\nstdout:\n{stdout.decode('utf-8')}\nstderr:\n{stderr.decode('utf-8')}")
-			
-			with open(output_a3m_path) as f:
-				a3m = f.read()
-		
+
+			a3m = Path(output_a3m_path).read_text()
 		return a3m

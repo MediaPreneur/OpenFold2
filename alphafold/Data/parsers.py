@@ -41,7 +41,7 @@ def parse_stockholm(stockholm_str: str) -> Tuple[Sequence[str], DeletionMatrix, 
 		if (not line) or line.startswith(('#', '//')):
 			continue
 		name, sequence = line.split()
-		if not(name in name_to_sequence):
+		if name not in name_to_sequence:
 			name_to_sequence[name] = ''
 		name_to_sequence[name] += sequence
 
@@ -66,7 +66,7 @@ def parse_stockholm(stockholm_str: str) -> Tuple[Sequence[str], DeletionMatrix, 
 					deletion_vec.append(deletion_count)
 					deletion_count = 0
 		deletion_matrix.append(deletion_vec)
-	
+
 	return msa, deletion_matrix, list(name_to_sequence.keys())
 
 def parse_hhr(hhr_string:str) -> Sequence[TemplateHit]:
