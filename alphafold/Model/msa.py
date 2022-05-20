@@ -30,9 +30,7 @@ class Attention(nn.Module):
 		self.softmax = nn.Softmax(dim=-1)
 		self.sigmoid = nn.Sigmoid()
 
-		if self.global_config.zero_init:
-			pass
-		else:
+		if not self.global_config.zero_init:
 			NotImplementedError()
 
 		if self.config.gating:
@@ -64,18 +62,18 @@ class Attention(nn.Module):
 		k = torch.einsum('bka,ahc->bkhc', m_data, self.k_weights)
 		v = torch.einsum('bka,ahc->bkhc', m_data, self.v_weights)
 		logits = torch.einsum('bqhc,bkhc->bhqk', q, k) + bias
-		if not(nonbatched_bias is None):
+		if nonbatched_bias is not None:
 			logits += nonbatched_bias.unsqueeze(dim=0)
 		weights = self.softmax(logits)
 		weighted_avg = torch.einsum('bhqk,bkhc->bqhc', weights, v)
-		
+
 		if self.config.gating:
 			gate_values = torch.einsum('bqc,chv->bqhv', q_data, self.gating_w) + self.gating_b
 			gate_values = self.sigmoid(gate_values)
 			weighted_avg *= gate_values
-		
-		output = torch.einsum('bqhc,hco->bqo', weighted_avg, self.o_weights) + self.o_bias
-		return output
+
+		return (
+		    torch.einsum('bqhc,hco->bqo', weighted_avg, self.o_weights) + self.o_bias)
 
 class MSARowAttentionWithPairBias(nn.Module):
 	"""
@@ -198,9 +196,7 @@ class GlobalAttention(nn.Module):
 		self.softmax = nn.Softmax(dim=-1)
 		self.sigmoid = nn.Sigmoid()
 
-		if self.global_config.zero_init:
-			pass
-		else:
+		if not self.global_config.zero_init:
 			NotImplementedError()
 
 		if self.config.gating:
@@ -216,11 +212,10 @@ class GlobalAttention(nn.Module):
 		for module, name in zip(modules, names):
 			if rel_path is None:
 				d = data[f'{name}']
+			elif ind is None:
+				d = data[f'{rel_path}'][f'{name}']
 			else:
-				if ind is None:
-					d = data[f'{rel_path}'][f'{name}']
-				else:
-					d = data[f'{rel_path}'][f'{name}'][ind,...]
+				d = data[f'{rel_path}'][f'{name}'][ind,...]
 			print(f'Loading {name}: {d.shape} -> {module.size()}')
 			module.data.copy_(torch.from_numpy(d))
 

@@ -129,11 +129,7 @@ def quat_to_rot(quaternion):
 			[2*(q1*q3-q0*q2), 			2*(q0*q1+q2*q3), 	q0*q0-q1*q1-q2*q2+q3*q3]]
 
 def apply_rot_to_vec(rot, vec, unstack:bool=False):
-	if unstack:
-		x, y, z = [vec[:, i] for i in range(3)]
-	else:
-		x, y, z = vec
-
+	x, y, z = [vec[:, i] for i in range(3)] if unstack else vec
 	return [rot[0][0]*x + rot[0][1]*y + rot[0][2]*z,
 			rot[1][0]*x + rot[1][1]*y + rot[1][2]*z,
 			rot[2][0]*x + rot[2][1]*y + rot[2][2]*z]
@@ -146,8 +142,8 @@ def apply_inverse_rot_to_vec(rot, vec):
 
 
 def quat_multiply_by_vec(quat, vec):
-	a, b, c, d = tuple([quat[..., i] for i in range(4)])
-	l, m, n = tuple([vec[..., i] for i in range(3)])
+	a, b, c, d = tuple(quat[..., i] for i in range(4))
+	l, m, n = tuple(vec[..., i] for i in range(3))
 	return torch.stack([-b*l - c*m - d*n, a*l + c*n - d*m, a*m - b*n + d*l, a*n + b*m - c*l], dim=-1)
 
 class QuatAffine(object):
@@ -157,12 +153,12 @@ class QuatAffine(object):
 	def __init__(self, 	quaternion:torch.Tensor, translation:torch.Tensor, rotation:torch.Tensor=None, 
 						normalize:bool=True, unstack_inputs:bool=False) -> None:
 		super().__init__()
-		if not(quaternion is None):
+		if quaternion is not None:
 			assert quaternion.shape[-1] == 4
 			if normalize:
 				quaternion = quaternion / torch.linalg.norm(quaternion, dim=-1, keepdim=True)
 		if unstack_inputs:
-			if not(rotation is None):
+			if rotation is not None:
 				rotation = [torch.moveaxis(x, -1, 0) for x in torch.moveaxis(rotation, -2, 0)]
 			translation = torch.moveaxis(translation, -1, 0)
 		if rotation is None:
@@ -184,16 +180,20 @@ class QuatAffine(object):
 		return torch.cat([self.quaternion]+[x.unsqueeze(dim=-1) for x in self.translation], dim=-1)
 
 	def scale_translation(self, position_scale):
-		return QuatAffine(	quaternion=self.quaternion, 
-							translation=[x * position_scale for x in self.translation],
-							rotation=[[x for x in row] for row in self.rotation], 
-							normalize=False)
+		return QuatAffine(
+		    quaternion=self.quaternion,
+		    translation=[x * position_scale for x in self.translation],
+		    rotation=[list(row) for row in self.rotation],
+		    normalize=False,
+		)
 	
 	def apply_rotation_tensor_fn(self, tensor_fn):
-		return QuatAffine(	quaternion=tensor_fn(self.quaternion),
-							translation=[x for x in self.translation],
-							rotation=[[tensor_fn(x) for x in row] for row in self.rotation], 
-							normalize=False)
+		return QuatAffine(
+		    quaternion=tensor_fn(self.quaternion),
+		    translation=list(self.translation),
+		    rotation=[[tensor_fn(x) for x in row] for row in self.rotation],
+		    normalize=False,
+		)
 	
 	def apply_to_point(self, point, extra_dims=0):
 		# r = self.rotation
@@ -248,17 +248,14 @@ class QuatAffine(object):
 
 	def cast_to(self, dtype=torch.float32):
 		self.quaternion = self.quaternion.to(dtype=dtype)
-		
+
 		r, t = [], []
 		for r_i in self.rotation:
-			r_vec = []
-			for r_ij in r_i:
-				r_vec.append(r_ij.to(dtype=dtype))
+			r_vec = [r_ij.to(dtype=dtype) for r_ij in r_i]
 			r.append(r_vec)
 		self.rotation = r
 
-		for t_i in self.translation:
-			t.append(t_i.to(dtype=dtype))
+		t.extend(t_i.to(dtype=dtype) for t_i in self.translation)
 		self.translation = t
 
 	def pre_compose(self, update:torch.Tensor):

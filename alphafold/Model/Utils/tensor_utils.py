@@ -18,7 +18,7 @@ def tree_map(fn, tree):
 	if isinstance(tree, list):
 		return [tree_map(fn, v) for v in tree]
 	if isinstance(tree, tuple):
-		return tuple([tree_map(fn, v) for v in tree])
+		return tuple(tree_map(fn, v) for v in tree)
 	if isinstance(tree, torch.Tensor):
 		return fn(tree)
 	raise(ValueError(f'Not supported {type(tree)}'))

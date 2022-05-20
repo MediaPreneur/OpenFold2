@@ -6,7 +6,7 @@ from collections.abc import Iterable
 import torch.utils.checkpoint as chkpt
 
 def recursive_walk(inputs: Iterable):
-	if isinstance(inputs, tuple) or isinstance(inputs, list):
+	if isinstance(inputs, (tuple, list)):
 		for inp in inputs:
 			yield from recursive_walk(inp)
 	elif isinstance(inputs, dict):
@@ -17,7 +17,7 @@ def recursive_walk(inputs: Iterable):
 
 def recursive_apply(fn: Callable, inputs: Iterable):
 	if isinstance(inputs, tuple):
-		return tuple([recursive_apply(fn, inp) for inp in inputs])
+		return tuple(recursive_apply(fn, inp) for inp in inputs)
 	elif isinstance(inputs, list):
 		return [recursive_apply(fn, inp) for inp in inputs]
 	elif isinstance(inputs, dict):
@@ -27,22 +27,18 @@ def recursive_apply(fn: Callable, inputs: Iterable):
 
 def recursive_flatten(inputs: Iterable, condition: Callable):
 	output = []
-	if isinstance(inputs, tuple):
+	if isinstance(inputs, (tuple, list)):
 		for inp in inputs:
 			flat_inp = recursive_flatten(inp, condition)
-			if not flat_inp is None:
-				output += flat_inp
-	elif isinstance(inputs, list):
-		for inp in inputs:
-			flat_inp = recursive_flatten(inp, condition)
-			if not flat_inp is None:
+			if flat_inp is not None:
 				output += flat_inp
 	elif isinstance(inputs, dict):
 		for key, inp in inputs.items():
 			flat_inp = recursive_flatten(inp, condition)
-			if not flat_inp is None:
+			if flat_inp is not None:
 				output += flat_inp
-	elif condition(inputs):
+	elif (not isinstance(inputs, tuple) and not isinstance(inputs, list)
+	      and not isinstance(inputs, dict) and condition(inputs)):
 		output.append(inputs)
 		return [inputs]
 	return output
@@ -94,9 +90,7 @@ class CheckpointFunction(torch.autograd.Function):
 				ctx.device_states = get_device_states(*args)
 		
 		def replace_tensors(arg):
-			if torch.is_tensor(arg):
-				return TensorPlaceholder(None)
-			return arg
+			return TensorPlaceholder(None) if torch.is_tensor(arg) else arg
 
 		tensor_inputs = []
 		ctx.inputs = recursive_apply(replace_tensors, args)
@@ -123,7 +117,7 @@ class CheckpointFunction(torch.autograd.Function):
 				" argument.")
 		def replace_placeholder(arg):
 			if isinstance(arg, TensorPlaceholder):
-				assert not(arg.tensor_index is None)
+				assert arg.tensor_index is not None
 				return ctx.saved_tensors[arg.tensor_index]
 			return arg
 		inputs = recursive_apply(replace_placeholder, ctx.inputs)
@@ -164,9 +158,7 @@ def checkpoint(function, *args, **kwargs):
 		raise ValueError("Unexpected keyword arguments: " + ",".join(arg for arg in kwargs))
 	
 	def replace_tensors(arg):
-		if torch.is_tensor(arg):
-			return TensorPlaceholder(None)
-		return arg
+		return TensorPlaceholder(None) if torch.is_tensor(arg) else arg
 
 	tensor_inputs = []
 	non_tensor_inputs = recursive_apply(replace_tensors, args)
@@ -186,7 +178,7 @@ def checkpoint(function, *args, **kwargs):
 		
 		def replace_placeholder(arg):
 			if isinstance(arg, TensorPlaceholder):
-				assert not(arg.tensor_index is None)
+				assert arg.tensor_index is not None
 				return args[arg.tensor_index]
 			return arg
 		
@@ -267,7 +259,7 @@ class TorchCheckpointFunction(torch.autograd.Function):
 			detached_inputs = chkpt.detach_variable(tuple(inputs))
 			with torch.enable_grad(), torch.cuda.amp.autocast(ctx.had_autocast_in_fwd):
 				outputs = ctx.run_function(*detached_inputs)
-		
+
 		if isinstance(outputs, torch.Tensor):
 			outputs = (outputs,)
 
@@ -278,7 +270,7 @@ class TorchCheckpointFunction(torch.autograd.Function):
 			if torch.is_tensor(outputs[i]) and outputs[i].requires_grad:
 				outputs_with_grad.append(outputs[i])
 				args_with_grad.append(args[i])
-		if len(outputs_with_grad) == 0:
+		if not outputs_with_grad:
 			raise RuntimeError(
 				"none of output has requires_grad=True,"
 				" this checkpoint() is not necessary")
@@ -294,6 +286,6 @@ class TorchCheckpointFunction(torch.autograd.Function):
 def torch_checkpoint(function, callback, *args, **kwargs):
 	preserve = kwargs.pop('preserve_rng_state', True)
 	if kwargs:
-		raise ValueError("Unexpected keyword arguments: " + ",".join(arg for arg in kwargs))
+		raise ValueError("Unexpected keyword arguments: " + ",".join(kwargs))
 
 	return TorchCheckpointFunction.apply(function, callback, preserve, *args)

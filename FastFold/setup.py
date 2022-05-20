@@ -20,22 +20,27 @@ def get_gpu_info():
     driver_version = xml.findall("driver_version")[0].text
     cuda_version = xml.findall("cuda_version")[0].text
 
-    for gpu_id, gpu in enumerate(xml.iter("gpu")):
-        gpu_data = {}
-        name = [x for x in gpu.iter("product_name")][0].text
+    for gpu in xml.iter("gpu"):
+        name = list(gpu.iter("product_name"))[0].text
         memory_usage = gpu.findall("fb_memory_usage")[0]
         total_memory = memory_usage.findall("total")[0].text
 
-        gpu_data["name"] = name
-        gpu_data["total_memory"] = total_memory
-        gpu_data["driver_version"] = driver_version
-        gpu_data["cuda_version"] = cuda_version
+        gpu_data = {
+            "name": name,
+            "total_memory": total_memory,
+            "driver_version": driver_version,
+            "cuda_version": cuda_version,
+        }
+
         datas.append(gpu_data)
     return datas
 
 
 def get_cuda_bare_metal_version(cuda_dir):
-    raw_output = subprocess.check_output([cuda_dir + "/bin/nvcc", "-V"], universal_newlines=True)
+    raw_output = subprocess.check_output(
+        [f"{cuda_dir}/bin/nvcc", "-V"], universal_newlines=True
+    )
+
     output = raw_output.split()
     release_idx = output.index("release") + 1
     release = output[release_idx].split(".")
@@ -51,7 +56,7 @@ def check_cuda_torch_binary_vs_bare_metal(cuda_dir):
     torch_binary_minor = torch.version.cuda.split(".")[1]
 
     print("\nCompiling cuda extensions with")
-    print(raw_output + "from " + cuda_dir + "/bin\n")
+    print(f"{raw_output}from {cuda_dir}" + "/bin\n")
 
     if (bare_metal_major != torch_binary_major) or (bare_metal_minor != torch_binary_minor):
         raise RuntimeError(

@@ -21,8 +21,7 @@ class SimpleIteration(nn.Module):
 			nn.Linear(f_mid, f_out)
 		)
 	def forward(self, x):
-		tensor = self.op(x)
-		return tensor
+		return self.op(x)
 
 class SimpleStack(nn.Module):
 	def __init__(self, f_in, f_mid, f_out, num_iter:int=5, checkpoint:bool=False) -> None:
@@ -31,10 +30,11 @@ class SimpleStack(nn.Module):
 
 		self.input_norm = nn.LayerNorm(f_in)
 		self.input_projection = nn.Linear(f_in, f_mid)
-		
+
 		self.output_projection = nn.Linear(f_mid, f_out)
 		self.relu = nn.ReLU()
-		self.iterations = nn.ModuleList([SimpleIteration(f_mid, 4*f_mid, f_mid) for i in range(num_iter)])
+		self.iterations = nn.ModuleList(
+		    [SimpleIteration(f_mid, 4 * f_mid, f_mid) for _ in range(num_iter)])
 
 	def forward(self, x):
 		x = self.relu(self.input_projection(self.input_norm(x)))
@@ -98,10 +98,11 @@ class DictStack(nn.Module):
 
 		self.input_norm = nn.LayerNorm(f_in)
 		self.input_projection = nn.Linear(f_in, f_mid)
-		
+
 		self.output_projection = nn.Linear(f_mid, f_out)
 		self.relu = nn.ReLU()
-		self.iterations = nn.ModuleList([DictIteration(f_mid, 4*f_mid, f_mid) for i in range(num_iter)])
+		self.iterations = nn.ModuleList(
+		    [DictIteration(f_mid, 4 * f_mid, f_mid) for _ in range(num_iter)])
 
 	def forward(self, batch:Dict[str, torch.Tensor])->Dict[str, torch.Tensor]:
 		a = self.relu(self.input_projection(self.input_norm(batch['a'])))

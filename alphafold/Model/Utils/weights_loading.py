@@ -23,16 +23,13 @@ def load_linear(data, modules, names:Sequence[int]=None, nums:Sequence[int]=None
 	else:
 		assert len(modules) == len(names)
 	if nums is None:
-		nums = [1 for name in names]
+		nums = [1 for _ in names]
 	else:
 		assert len(nums) == len(names)
 
 	for module, name, num in zip(modules, names, nums):
 		for i in range(num):
-			if i==0:
-				add_str = ''
-			else:
-				add_str = f'_{i}'
+			add_str = '' if i==0 else f'_{i}'
 			if rel_path is None:
 				path = f'{name}{add_str}'
 			else:
@@ -44,7 +41,7 @@ def load_linear(data, modules, names:Sequence[int]=None, nums:Sequence[int]=None
 			else:
 				w = torch.from_numpy(data[path]['weights'])[ind,...].transpose(-1,-2)
 				b = torch.from_numpy(data[path]['bias'])[ind,...]
-			
+
 			if isinstance(module, nn.ModuleList):
 				print(f'Loading {name}{add_str}.weight: {w.shape} -> {module[i].weight.size()}')
 				print(f'Loading {name}{add_str}.bias: {b.shape} -> {module[i].bias.size()}')
@@ -58,14 +55,13 @@ def load_linear(data, modules, names:Sequence[int]=None, nums:Sequence[int]=None
 
 def load_params(data, parameters, names:Sequence[int]=None, rel_path: str='predicted_aligned_error_head', ind:int=None):
 	assert len(parameters) == len(names)
-	
+
 	for param, name in zip(parameters, names):
 		if rel_path is None:
 			d = data[f'{name}']
+		elif ind is None:
+			d = data[f'{rel_path}'][f'{name}']
 		else:
-			if ind is None:
-				d = data[f'{rel_path}'][f'{name}']
-			else:
-				d = data[f'{rel_path}'][f'{name}'][ind,...]
+			d = data[f'{rel_path}'][f'{name}'][ind,...]
 		print(f'Loading {name}: {d.shape} -> {param.size()}')
 		param.data.copy_(torch.from_numpy(d))

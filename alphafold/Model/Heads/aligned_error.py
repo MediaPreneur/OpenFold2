@@ -23,10 +23,7 @@ class PredictedAlignedErrorHead(nn.Module):
 		nums=[1]
 		for module, name, num in zip(modules, names, nums):
 			for i in range(num):
-				if i==0:
-					add_str = ''
-				else:
-					add_str = f'_{i}'
+				add_str = '' if i==0 else f'_{i}'
 				if ind is None:
 					w = data[f'{rel_path}/{name}{add_str}']['weights'].transpose(-1,-2)
 					b = data[f'{rel_path}/{name}{add_str}']['bias']

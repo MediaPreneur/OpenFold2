@@ -21,9 +21,8 @@ class GeneralFileData(Dataset):
 		for path in self.dir.iterdir():
 			if not path.is_file():
 				continue
-			if not(allowed_suffixes is None):
-				if not(path.suffix in allowed_suffixes):
-					continue
+			if allowed_suffixes is not None and path.suffix not in allowed_suffixes:
+				continue
 			self.keys.append(path.stem.lower())
 			self.data[path.stem.lower()] = (path.as_posix(),)
 
@@ -31,8 +30,7 @@ class GeneralFileData(Dataset):
 		
 	def __getitem__(self, index) -> Path:
 		key = self.keys[index]
-		data = self.data[key]
-		return data
+		return self.data[key]
 
 	def __len__(self):
 		return len(self.keys)

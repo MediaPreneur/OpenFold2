@@ -93,7 +93,9 @@ def make_atom14_masks(protein):
 		atom_names = residue_constants.restype_name_to_atom14_names[residue_constants.restype_1to3[rt]]
 		restype_atom14_to_atom37.append([ (residue_constants.atom_order[name] if name else 0) for name in atom_names])
 		atom_name_to_idx14 = {name:i for i,name in enumerate(atom_names)}
-		restype_atom37_to_atom14.append([(atom_name_to_idx14[name] if name in atom_name_to_idx14 else 0) for name in residue_constants.atom_types])
+		restype_atom37_to_atom14.append([
+		    atom_name_to_idx14.get(name, 0) for name in residue_constants.atom_types
+		])
 		restype_atom14_mask.append([(1.0 if name else 0.0) for name in atom_names])
 	restype_atom14_to_atom37.append([0]*14)
 	restype_atom37_to_atom14.append([0]*37)
@@ -101,7 +103,7 @@ def make_atom14_masks(protein):
 	restype_atom14_to_atom37 = torch.tensor(restype_atom14_to_atom37, dtype=torch.int32, device=protein['aatype'].device)
 	restype_atom37_to_atom14 = torch.tensor(restype_atom37_to_atom14, dtype=torch.int32, device=protein['aatype'].device)
 	restype_atom14_mask = torch.tensor(restype_atom14_mask, dtype=torch.float32, device=protein['aatype'].device)
-	
+
 	protein_aatype = protein['aatype'].to(dtype=torch.long)
 	protein['residx_atom14_to_atom37'] = restype_atom14_to_atom37[protein_aatype].long()
 	protein['atom14_atom_exists'] = restype_atom14_mask[protein_aatype]
@@ -121,19 +123,19 @@ def make_atom14_masks(protein):
 def sample_msa(protein, max_seq, keep_extra, seed=None):
 	num_seq = protein["msa"].shape[0]
 	g = torch.Generator(protein["msa"].device)
-	if not(seed is None):
+	if seed is not None:
 		g.manual_seed(seed)
 	shuffled = torch.randperm(num_seq - 1, generator=g, device=protein['msa'].device) + 1
 	index_order = torch.cat([torch.tensor([0], device=shuffled.device), shuffled], dim=0)
 	num_sel = min(max_seq, num_seq)
 	sel_seq, not_sel_seq = torch.split(index_order, [num_sel, num_seq-num_sel])
-	
+
 	for k in MSA_FEATURE_NAMES:
 		if k in protein:
 			if keep_extra:
 				protein[f'extra_{k}'] = torch.index_select(protein[k], 0, not_sel_seq)
 			protein[k] = torch.index_select(protein[k], 0, sel_seq)
-	
+
 	return protein
 
 def sample_msa_distillation(protein, max_seq):
@@ -335,11 +337,10 @@ def make_fixed_size(protein, shape_schema, msa_cluster_size, extra_msa_size, num
 		pad_size = [pad_size_map.get(s2, None) or s1 for s1, s2 in zip(shape, schema)]
 		padding = [(0, p-v.shape[i]) for i, p in enumerate(pad_size)]
 		padding.reverse()
-		padding = list(itertools.chain(*padding))
-		if padding:
+		if padding := list(itertools.chain(*padding)):
 			protein[k] = torch.nn.functional.pad(v, padding)
 			protein[k] = torch.reshape(protein[k], pad_size)
-	
+
 	return protein
 
 
